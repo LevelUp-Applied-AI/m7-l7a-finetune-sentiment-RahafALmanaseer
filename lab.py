@@ -15,6 +15,7 @@ The model directory is local-only (gitignored).
 
 import json
 import os
+os.system("pip install --upgrade accelerate")
 
 import numpy as np
 import pandas as pd
