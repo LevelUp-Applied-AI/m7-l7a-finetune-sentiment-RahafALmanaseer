@@ -126,8 +126,6 @@ def train_classifier(
     """
     Construct and train a Trainer.
     """
-    # load model with AutoModelForSequenceClassification.from_pretrained(
-    # model_name, num_labels=num_labels, id2label=ID2LABEL, label2id=LABEL2ID)
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         num_labels=num_labels,
@@ -135,25 +133,20 @@ def train_classifier(
         label2id=LABEL2ID
     )
 
-    # build data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
-    # build Trainer with model, args, train/eval datasets, tokenizer, data_collator, compute_metrics
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_ds["train"],
         eval_dataset=tokenized_ds["test"],
-        processing_class=tokenizer,  
-
+        tokenizer=tokenizer,  
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
 
-    # call trainer.train()
     trainer.train()
 
-    # return trainer
     return trainer
 
 
