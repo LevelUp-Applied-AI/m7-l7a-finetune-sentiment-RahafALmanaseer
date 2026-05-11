@@ -62,16 +62,17 @@ def prepare_dataset(data_path: str, test_size: float = 0.2, seed: int = 42) -> D
 
 def tokenize_dataset(ds_dict: DatasetDict, tokenizer, max_length: int = 128) -> DatasetDict:
     """
-    Tokenize all splits in a DatasetDict and align label names.
+    Tokenize all splits in a DatasetDict and ensure labels are correctly named.
     """
     def tokenize_fn(batch):
+        
         tokenized_output = tokenizer(batch["text"], truncation=True, max_length=max_length)
         
         tokenized_output["labels"] = batch["label"]
         
         return tokenized_output
 
-    return ds_dict.map(tokenize_fn, batched=True)
+        return ds_dict.map(tokenize_fn, batched=True)
 
 
 def make_training_args(
