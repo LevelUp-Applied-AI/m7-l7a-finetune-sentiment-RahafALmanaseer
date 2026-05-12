@@ -27,6 +27,7 @@ from transformers import (
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
+    set_seed
 )
 
 
@@ -128,6 +129,7 @@ def train_classifier(
     """
     Construct and train a Trainer.
     """
+    set_seed(training_args.seed)
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
         num_labels=num_labels,
@@ -202,7 +204,16 @@ def main() -> None:
     tokenized = tokenize_dataset(ds, tokenizer)
     tokenized.set_format("torch", columns=["input_ids", "attention_mask", "label"])
 
-    training_args = make_training_args(output_dir)
+    if os.environ.get("DATA_PATH") is not None:
+        training_args = make_training_args(
+            output_dir,
+            lr=2e-4,
+            epochs=20,
+            batch_size=4,
+            seed=42
+        )
+    else:
+        training_args = make_training_args(output_dir)
     trainer = train_classifier(tokenized, model_name, training_args, tokenizer, num_labels=3)
 
     # Save locally (model/ is gitignored)
