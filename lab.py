@@ -1,7 +1,7 @@
 """
 Module 7 Week A — Applied Lab: Fine-Tune DistilBERT for App-Review Sentiment.
 
-Implement the TODO functions to build a complete fine-tuning pipeline.
+Implement the functions to build a complete fine-tuning pipeline.
 
 Default run: `python lab.py` reads `data/app_reviews_train.csv` (7,472 reviews
 across 9 apps with 3 sentiment classes: 0=negative, 1=neutral, 2=positive)
@@ -15,7 +15,6 @@ The model directory is local-only (gitignored).
 
 import json
 import os
-os.system("pip install --upgrade accelerate")
 
 import numpy as np
 import pandas as pd
@@ -27,7 +26,7 @@ from transformers import (
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
-    set_seed
+    set_seed,
 )
 
 
@@ -52,28 +51,26 @@ def prepare_dataset(data_path: str, test_size: float = 0.2, seed: int = 42) -> D
 
     The CSV must have at least `text` and `label` columns.
     """
-    # read the CSV with pandas
+    #read the CSV with pandas
     df = pd.read_csv(data_path)
-    # convert with Dataset.from_pandas(df, preserve_index=False)
+    #convert with Dataset.from_pandas(df, preserve_index=False)
     ds = Dataset.from_pandas(df, preserve_index=False)
-    # split with .train_test_split(test_size=test_size, seed=seed)
-    # return the resulting DatasetDict
+    #split with .train_test_split(test_size=test_size, seed=seed)
+    #return the resulting DatasetDict
     return ds.train_test_split(test_size=test_size, seed=seed)
 
 
 def tokenize_dataset(ds_dict: DatasetDict, tokenizer, max_length: int = 128) -> DatasetDict:
     """
-    Tokenize all splits in a DatasetDict and ensure labels are correctly named.
+    Tokenize all splits in a DatasetDict.
     """
+    #define tokenize_fn(batch) calling the passed-in tokenizer with truncation + max_length
     def tokenize_fn(batch):
-        
-        tokenized_output = tokenizer(batch["text"], truncation=True, max_length=max_length)
-        
-        tokenized_output["labels"] = batch["label"]
-        
-        return tokenized_output
+        return tokenizer(batch["text"], truncation=True, max_length=max_length)
 
-        return ds_dict.map(tokenize_fn, batched=True)
+    #apply ds_dict.map(tokenize_fn, batched=True)
+    #return the tokenized DatasetDict
+    return ds_dict.map(tokenize_fn, batched=True)
 
 
 def make_training_args(
@@ -84,7 +81,6 @@ def make_training_args(
     seed: int = 42,
 ) -> TrainingArguments:
     """Return a TrainingArguments configured for fine-tuning."""
-    
     args = TrainingArguments(
         output_dir=output_dir,
         learning_rate=lr,
@@ -92,7 +88,7 @@ def make_training_args(
         per_device_train_batch_size=batch_size,
         per_device_eval_batch_size=batch_size,
         seed=seed,
-        eval_strategy="epoch",  
+        eval_strategy="epoch",
         save_strategy="epoch",
         logging_steps=50,
         load_best_model_at_end=True,
@@ -100,22 +96,23 @@ def make_training_args(
 
     args.eval_strategy = "epoch"
     args.save_strategy = "epoch"
-    
+
     return args
+
 
 
 def compute_metrics(eval_pred):
     """
     Convert (logits, labels) into {"accuracy": ..., "macro_f1": ...}.
     """
-    # unpack eval_pred to logits, labels
+    #unpack eval_pred to logits, labels
     logits, labels = eval_pred
-    # argmax logits over axis 1
+    #argmax logits over axis 1
     predictions = np.argmax(logits, axis=-1)
-    # compute accuracy and macro-F1
+    #compute accuracy and macro-F1
     acc = accuracy_score(labels, predictions)
     f1 = f1_score(labels, predictions, average="macro")
-    # return as a dict
+    #return as a dict
     return {"accuracy": acc, "macro_f1": f1}
 
 
@@ -129,6 +126,8 @@ def train_classifier(
     """
     Construct and train a Trainer.
     """
+    #load model with AutoModelForSequenceClassification.from_pretrained(
+    #         model_name, num_labels=num_labels, id2label=ID2LABEL, label2id=LABEL2ID)
     set_seed(training_args.seed)
     model = AutoModelForSequenceClassification.from_pretrained(
         model_name,
@@ -137,20 +136,24 @@ def train_classifier(
         label2id=LABEL2ID
     )
 
+    #build data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
     data_collator = DataCollatorWithPadding(tokenizer=tokenizer)
 
+    #build Trainer with model, args, train/eval datasets, tokenizer, data_collator, compute_metrics
     trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=tokenized_ds["train"],
         eval_dataset=tokenized_ds["test"],
-        tokenizer=tokenizer,  
+        processing_class=tokenizer,
         data_collator=data_collator,
         compute_metrics=compute_metrics,
     )
 
+    #call trainer.train()
     trainer.train()
 
+    #return trainer
     return trainer
 
 
@@ -160,30 +163,30 @@ def evaluate_classifier(trainer: Trainer, tokenized_test) -> dict:
 
     Returns: {"accuracy": float, "macro_f1": float, "per_class_f1": {label_name: f1, ...}, ...}
     """
-    # predict on tokenized_test using trainer.predict
+    #predict on tokenized_test using trainer.predict
     predictions_output = trainer.predict(tokenized_test)
     logits = predictions_output.predictions
     labels = predictions_output.label_ids
 
-    # argmax predictions to class indices
+    #argmax predictions to class indices
     preds = np.argmax(logits, axis=-1)
 
-    # compute accuracy and macro-F1
+    #compute accuracy and macro-F1
     acc = accuracy_score(labels, preds)
     f1_macro = f1_score(labels, preds, average="macro")
 
-    # compute per-class metrics
+    #compute per-class metrics
     f1_per_class = f1_score(labels, preds, average=None)
     precision_per_class = precision_score(labels, preds, average=None, zero_division=0)
     recall_per_class = recall_score(labels, preds, average=None, zero_division=0)
 
-    # build per_class dicts using trainer.model.config.id2label for label names
+    #build per_class dicts using trainer.model.config.id2label for label names
     id2label = trainer.model.config.id2label
     per_class_f1 = {id2label[i]: float(f1_per_class[i]) for i in range(len(f1_per_class))}
     per_class_precision = {id2label[i]: float(precision_per_class[i]) for i in range(len(precision_per_class))}
     per_class_recall = {id2label[i]: float(recall_per_class[i]) for i in range(len(recall_per_class))}
 
-    # return all metrics
+    #return all metrics
     return {
         "accuracy": float(acc),
         "macro_f1": float(f1_macro),
@@ -214,6 +217,7 @@ def main() -> None:
         )
     else:
         training_args = make_training_args(output_dir)
+
     trainer = train_classifier(tokenized, model_name, training_args, tokenizer, num_labels=3)
 
     # Save locally (model/ is gitignored)
